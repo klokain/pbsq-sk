@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "paybysquare": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/paybysquare/dist/mcp-server/index.js"
+      ],
+      "env": {}
+    }
+  }
+}
