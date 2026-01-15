@@ -15,13 +15,18 @@ import {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
+import * as path from 'path';
+import * as fs from 'fs/promises';
 import {
-  generatePayBySquare,
+  generatePayBySquareToFile,
   decodePayBySquare,
   checkCompliance,
   isCompliant,
   verifyRoundTrip,
 } from '../src/index.js';
+
+// Default output directory for QR codes
+const DEFAULT_OUTPUT_DIR = path.join(process.env.HOME || '/tmp', 'paybysquare-qr-codes');
 
 // Zod schemas for input validation
 const PayBySquareInputSchema = z.object({
@@ -51,13 +56,14 @@ const GenerationOptionsSchema = z.object({
     light: z.string().optional(),
   }).optional(),
   removeAccents: z.boolean().optional(),
+  outputDirectory: z.string().optional(),
 });
 
 // Define MCP tools
 const TOOLS: Tool[] = [
   {
     name: 'generate_paybysquare',
-    description: 'Generate a PayBySquare QR code PNG image from payment data. Returns base64-encoded PNG.',
+    description: 'Generate a PayBySquare QR code PNG image from payment data. REQUIRED: beneficiaryName (recipient\'s full name). RECOMMENDED: swift (BIC code for international transfers). Saves QR code to file and returns file path.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -66,7 +72,7 @@ const TOOLS: Tool[] = [
           description: 'Payment data',
           properties: {
             iban: { type: 'string', description: 'Beneficiary IBAN (e.g., "SK9611000000002918599669")' },
-            beneficiaryName: { type: 'string', description: 'Recipient name (max 70 chars)' },
+            beneficiaryName: { type: 'string', description: 'Beneficiary\'s full name (REQUIRED, max 70 characters)' },
             amount: { type: 'number', description: 'Payment amount (positive number)' },
             currency: { type: 'string', description: 'ISO 4217 currency code (default: EUR)' },
             variableSymbol: { type: 'string', description: 'Variable symbol (1-10 digits)' },
@@ -74,7 +80,7 @@ const TOOLS: Tool[] = [
             specificSymbol: { type: 'string', description: 'Specific symbol (1-10 digits)' },
             paymentNote: { type: 'string', description: 'Payment note (max 140 chars)' },
             dueDate: { type: 'string', description: 'Due date in YYYY-MM-DD format' },
-            swift: { type: 'string', description: 'SWIFT/BIC code' },
+            swift: { type: 'string', description: 'SWIFT/BIC code for bank identification (highly recommended for international payments and proper bank routing)' },
             originatorReference: { type: 'string', description: 'Originator reference' },
             beneficiaryAddress: {
               type: 'object',
@@ -101,6 +107,7 @@ const TOOLS: Tool[] = [
               },
             },
             removeAccents: { type: 'boolean', description: 'Remove diacritics (default: true)' },
+            outputDirectory: { type: 'string', description: 'Directory where QR code PNG will be saved (default: ~/paybysquare-qr-codes/)' },
           },
         },
       },
@@ -231,8 +238,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const validatedPayment = PayBySquareInputSchema.parse(payment);
         const validatedOptions = options ? GenerationOptionsSchema.parse(options) : undefined;
 
-        // Generate QR code
-        const buffer = await generatePayBySquare(validatedPayment, validatedOptions);
+        // Determine output directory
+        const outputDir = validatedOptions?.outputDirectory || DEFAULT_OUTPUT_DIR;
+
+        // Ensure output directory exists
+        await fs.mkdir(outputDir, { recursive: true });
+
+        // Generate unique filename
+        const timestamp = Date.now();
+        const random = Math.random().toString(36).substring(2, 8);
+        const fileName = `paybysquare-${timestamp}-${random}.png`;
+        const filePath = path.join(outputDir, fileName);
+
+        // Generate QR code to file
+        await generatePayBySquareToFile(validatedPayment, filePath, validatedOptions);
 
         return {
           content: [
@@ -240,9 +259,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               type: 'text',
               text: JSON.stringify({
                 success: true,
-                imageBase64: buffer.toString('base64'),
-                size: buffer.length,
-                message: 'QR code generated successfully',
+                filePath: filePath,
+                fileName: fileName,
+                message: 'QR code generated and saved successfully',
               }, null, 2),
             },
           ],
