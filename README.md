@@ -31,6 +31,52 @@ A comprehensive Node.js/TypeScript library for **PayBySquare** QR codes: Generat
 - ✅ Thoroughly tested (96 unit tests with 90%+ coverage)
 - ✅ **MCP Server** - Use with Claude Desktop and other MCP clients
 
+## Breaking Changes
+
+### MCP Server v1.1.0 (January 2026)
+
+**⚠️ Breaking Change: `generate_paybysquare` tool now returns file paths instead of base64-encoded images**
+
+The MCP server's `generate_paybysquare` tool has been updated to save QR codes as files and return file paths instead of returning binary data as base64. This change provides better LLM context efficiency and makes generated QR codes persistent for later use.
+
+**Before (v1.0.0):**
+```json
+{
+  "success": true,
+  "imageBase64": "iVBORw0KGgoAAAANSUhEUg...",
+  "size": 12345,
+  "message": "QR code generated successfully"
+}
+```
+
+**After (v1.1.0):**
+```json
+{
+  "success": true,
+  "filePath": "/Users/username/paybysquare-qr-codes/paybysquare-1705331234567-a3f2.png",
+  "fileName": "paybysquare-1705331234567-a3f2.png",
+  "message": "QR code generated and saved successfully"
+}
+```
+
+**Migration:**
+- QR codes are now saved to `~/paybysquare-qr-codes/` by default
+- Use the `outputDirectory` option to specify a custom save location
+- Access the generated file using the returned `filePath`
+- Note: The core library functions (`generatePayBySquare`, `generatePayBySquareToFile`) remain unchanged
+
+**Enhanced Documentation:**
+- Tool descriptions now emphasize that `beneficiaryName` is **REQUIRED**
+- `swift` (BIC code) is now marked as **RECOMMENDED** for international payments
+
+**Benefits:**
+- Reduced token usage (file paths vs. base64 data)
+- Better LLM context efficiency
+- Persistent QR codes for later reference
+- Easier integration with file-based workflows
+
+**Note:** This change only affects the MCP server. The core Node.js/TypeScript library API remains fully backward compatible.
+
 ## Installation
 
 ```bash
@@ -561,10 +607,13 @@ This library includes a **Model Context Protocol (MCP) server** that exposes all
 
 ### Available Tools
 
-- `generate_paybysquare` - Generate QR codes from payment data
-- `decode_paybysquare` - Decode QR codes to payment data
-- `check_compliance` - Validate payment data compliance
-- `verify_roundtrip` - Verify lossless encoding/decoding
+- `generate_paybysquare` - Generate QR codes from payment data (saves to file, returns file path)
+  - **Required:** `beneficiaryName` (recipient's full name)
+  - **Recommended:** `swift` (BIC code for international transfers)
+  - **Optional:** `outputDirectory` (custom save location, default: `~/paybysquare-qr-codes/`)
+- `decode_paybysquare` - Decode QR codes to payment data (from base64-encoded PNG)
+- `check_compliance` - Validate payment data compliance with detailed error reports
+- `verify_roundtrip` - Verify lossless encoding/decoding (data integrity check)
 
 ### Quick Setup
 
@@ -598,7 +647,14 @@ Generate a PayBySquare QR code for:
 - IBAN: SK9611000000002918599669
 - Beneficiary: John Doe
 - Amount: 100.50 EUR
+- SWIFT: TATRSKBX
 - Payment note: Invoice #12345
+```
+
+Claude will generate the QR code and save it to a file, returning:
+```
+✓ QR code generated successfully!
+File saved to: /Users/username/paybysquare-qr-codes/paybysquare-1705331234567-a3f2.png
 ```
 
 ```
@@ -611,7 +667,10 @@ Check if this payment data is compliant with banking standards:
 - IBAN: SK9611000000002918599669
 - Beneficiary: Test Company
 - Amount: 250 EUR
+- SWIFT: TATRSKBX
 ```
+
+**Note:** QR codes are automatically saved to `~/paybysquare-qr-codes/` by default. You can specify a custom directory using the `outputDirectory` option.
 
 For detailed MCP server documentation, see [mcp-server/README.md](./mcp-server/README.md).
 
